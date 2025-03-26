@@ -174,61 +174,177 @@ HTML_TEMPLATE = """
   <!-- DataTables CSS -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
   <style>
-    body { font-family: 'Roboto', sans-serif; }
-    pre { white-space: pre-wrap; word-wrap: break-word; }
-    .container { margin-top: 20px; }
-    tfoot input { width: 100%; box-sizing: border-box; }
+    body { 
+      font-family: 'Roboto', sans-serif;
+      font-size: 9pt;
+    }
+    pre { 
+      white-space: pre-wrap; 
+      word-wrap: break-word;
+      font-size: 9pt;
+    }
+    .container { 
+      margin-top: 20px;
+      min-height: calc(100vh - 40px);  /* 减去上下margin的高度 */
+      display: flex;
+      flex-direction: column;
+    }
+    .content-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+    .table-container {
+      flex: 1;
+      margin-top: 20px;
+    }
+    tfoot input { 
+      width: 100%; 
+      box-sizing: border-box;
+      font-size: 9pt;
+    }
+    .attachment-links a { margin-right: 5px; }
+    th { 
+      white-space: nowrap;
+      font-size: 9pt;
+    }
+    td {
+      font-size: 9pt;
+    }
+    .btn {
+      font-size: 9pt;
+    }
+    .form-control {
+      font-size: 9pt;
+    }
+    h1 {
+      font-size: 16pt;
+      margin: 0;
+      padding-top: 3px;
+    }
+    h5 {
+      font-size: 11pt;
+    }
+    select {
+      font-size: 9pt;
+    }
+    label {
+      font-size: 9pt;
+    }
+    .dataTables_wrapper .dataTables_length select {
+      font-size: 9pt;
+      height: auto;
+      padding: 1px;
+    }
+    .dataTables_wrapper .dataTables_filter input {
+      font-size: 9pt;
+      height: auto;
+      padding: 1px;
+    }
+    .dataTables_info {
+      font-size: 9pt;
+    }
+    .dataTables_paginate {
+      font-size: 9pt;
+    }
+    .server-info {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: #f8f9fa;
+      color: #212529;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 9pt;
+      z-index: 1000;
+      border: 1px solid #dee2e6;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .server-info p {
+      margin: 0;
+      padding: 2px 0;
+    }
+    .server-info .title {
+      font-weight: bold;
+      border-bottom: 1px solid #dee2e6;
+      margin-bottom: 5px;
+      padding-bottom: 5px;
+      color: #495057;
+    }
+    .server-info a {
+      color: #0d6efd;  /* Bootstrap 主链接颜色 */
+      text-decoration: none;
+    }
+    .server-info a:hover {
+      text-decoration: underline;
+    }
+    .header-container {
+      position: relative;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1 class="mb-4">受信したメール</h1>
-    <div class="mb-3">
-      <a href="{{ url_for('refresh_emails') }}" class="btn btn-info">手動更新</a>
-      <a href="{{ url_for('clear_emails') }}" class="btn btn-warning" onclick="return confirm('すべてのメールを削除してもよろしいですか？');">すべてのメールを削除</a>
+    <div class="content-wrapper">
+      <div class="header-container">
+        <h1>受信したメール</h1>
+        <div class="server-info">
+          <p class="title">サーバー情報</p>
+          <p>SMTP: {{ smtp_server }}:{{ smtp_port }}</p>
+          <p>Web: <a href="http://{{ web_server }}:{{ web_port }}">http://{{ web_server }}:{{ web_port }}</a></p>
+        </div>
+      </div>
+      <div class="mb-3">
+        <a href="{{ url_for('refresh_emails') }}" class="btn btn-info">手動更新</a>
+        <a href="{{ url_for('clear_emails') }}" class="btn btn-warning" onclick="return confirm('すべてのメールを削除してもよろしいですか？');">すべてのメールを削除</a>
+      </div>
+      <div class="table-container">
+        <table id="emailTable" class="table table-striped table-bordered">
+          <thead class="table-dark">
+            <tr>
+              <th>時間</th>
+              <th>件名</th>
+              <th>送信者</th>
+              <th>受信者</th>
+              <th>クライアントIP</th>
+              <th>メールクライアント</th>
+              <th>本文</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tfoot>
+            <tr>
+              <th>時間</th>
+              <th>件名</th>
+              <th>送信者</th>
+              <th>受信者</th>
+              <th>クライアントIP</th>
+              <th>メールクライアント</th>
+              <th>本文</th>
+              <th>操作</th>
+            </tr>
+          </tfoot>
+          <tbody>
+            {% for email in emails %}
+            <tr>
+              <td>{{ email.time }}</td>
+              <td>{{ email.subject }}</td>
+              <td>{{ email.sender }}</td>
+              <td>{{ email.to|join(', ') }}</td>
+              <td>{{ email.client_ip }}</td>
+              <td>{{ email.client_app }}</td>
+              <td><pre>{{ email.body }}</pre></td>
+              <td>
+                <a href="{{ url_for('delete_email', email_id=email.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('このメールを削除してもよろしいですか？');">削除</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    <table id="emailTable" class="table table-striped table-bordered">
-      <thead class="table-dark">
-        <tr>
-          <th>時間</th>
-          <th>件名</th>
-          <th>送信者</th>
-          <th>受信者</th>
-          <th>クライアントIP</th>
-          <th>メールクライアント</th>
-          <th>本文</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tfoot>
-        <tr>
-          <th>時間</th>
-          <th>件名</th>
-          <th>送信者</th>
-          <th>受信者</th>
-          <th>クライアントIP</th>
-          <th>メールクライアント</th>
-          <th>本文</th>
-          <th>操作</th>
-        </tr>
-      </tfoot>
-      <tbody>
-        {% for email in emails %}
-        <tr>
-          <td>{{ email.time }}</td>
-          <td>{{ email.subject }}</td>
-          <td>{{ email.sender }}</td>
-          <td>{{ email.to|join(', ') }}</td>
-          <td>{{ email.client_ip }}</td>
-          <td>{{ email.client_app }}</td>
-          <td><pre>{{ email.body }}</pre></td>
-          <td>
-            <a href="{{ url_for('delete_email', email_id=email.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('このメールを削除してもよろしいですか？');">削除</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
   </div>
 
   <!-- jQuery -->
@@ -237,18 +353,42 @@ HTML_TEMPLATE = """
   <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
   <script>
     $(document).ready(function() {
+      // DataTablesの日本語化
+      var table = $('#emailTable').DataTable({
+        language: {
+          url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/ja.json',
+          search: "検索:",
+          lengthMenu: "表示件数: _MENU_",
+          info: "_TOTAL_件中 _START_件から_END_件を表示",
+          infoEmpty: "データがありません",
+          infoFiltered: "（全_MAX_件より抽出）",
+          zeroRecords: "データがありません",
+          paginate: {
+            first: "先頭",
+            previous: "前へ",
+            next: "次へ",
+            last: "最終"
+          }
+        },
+        order: [[0, 'desc']],
+        pageLength: 10,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        dom: "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+             "<'row'<'col-sm-12'tr>>" +
+             "<'row'<'col-sm-5'i><'col-sm-7'p>>"
+      });
+
+      // フッターの各列にフィルター入力欄を追加
       $('#emailTable tfoot th').each(function(i) {
         if (i === 7) {
           $(this).html('');
         } else {
           var title = $(this).text();
-          $(this).html('<input type="text" placeholder="'+ title +'でフィルター" />');
+          $(this).html('<input type="text" class="form-control form-control-sm" placeholder="' + title + 'でフィルター" />');
         }
       });
-      // デフォルトのソートを時間の降順に設定（1列目、インデックス0）
-      var table = $('#emailTable').DataTable({
-        order: [[0, 'desc']]
-      });
+
+      // フィルター機能の実装
       table.columns().every(function() {
         var that = this;
         $('input', this.footer()).on('keyup change clear', function() {
@@ -265,7 +405,14 @@ HTML_TEMPLATE = """
 
 @app.route("/")
 def index():
-    return render_template_string(HTML_TEMPLATE, emails=received_emails)
+    web_host = "localhost" if SMTP_SERVER == "0.0.0.0" else SMTP_SERVER
+    return render_template_string(HTML_TEMPLATE, 
+        emails=received_emails,
+        smtp_server=SMTP_SERVER,
+        smtp_port=SMTP_PORT,
+        web_server=web_host,
+        web_port=5000
+    )
 
 @app.route("/delete/<email_id>")
 def delete_email(email_id):

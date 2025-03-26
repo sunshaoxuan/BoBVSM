@@ -196,7 +196,22 @@ HTML_TEMPLATE = """
       word-wrap: break-word;
       font-size: 9pt;
     }
-    .container { margin-top: 20px; }
+    .container { 
+      margin-top: 20px;
+      min-height: calc(100vh - 40px);  /* 减去上下margin的高度 */
+      display: flex;
+      flex-direction: column;
+    }
+    .content-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+    .table-container {
+      flex: 1;
+      margin-top: 20px;
+    }
     tfoot input { 
       width: 100%; 
       box-sizing: border-box;
@@ -218,6 +233,8 @@ HTML_TEMPLATE = """
     }
     h1 {
       font-size: 16pt;
+      margin: 0;
+      padding-top: 3px;
     }
     h5 {
       font-size: 11pt;
@@ -244,72 +261,118 @@ HTML_TEMPLATE = """
     .dataTables_paginate {
       font-size: 9pt;
     }
+    .server-info {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: #f8f9fa;
+      color: #212529;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 9pt;
+      z-index: 1000;
+      border: 1px solid #dee2e6;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .server-info p {
+      margin: 0;
+      padding: 2px 0;
+    }
+    .server-info .title {
+      font-weight: bold;
+      border-bottom: 1px solid #dee2e6;
+      margin-bottom: 5px;
+      padding-bottom: 5px;
+      color: #495057;
+    }
+    .server-info a {
+      color: #0d6efd;  /* Bootstrap 主链接颜色 */
+      text-decoration: none;
+    }
+    .server-info a:hover {
+      text-decoration: underline;
+    }
+    .header-container {
+      position: relative;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1 class="mb-4">受信したメール</h1>
-    <div class="mb-3">
-      <a href="{{ url_for('refresh_emails') }}" class="btn btn-info">手動更新</a>
-      <a href="{{ url_for('clear_emails') }}" class="btn btn-warning" onclick="return confirm('すべてのメールを削除してもよろしいですか？');">すべてのメールを削除</a>
-    </div>
-    <table id="emailTable" class="table table-striped table-bordered">
-      <thead class="table-dark">
-        <tr>
-          <th>時間</th>
-          <th>件名</th>
-          <th>送信者</th>
-          <th>受信者</th>
-          <th>クライアントIP</th>
-          <th>メールクライアント</th>
-          <th>本文/添付ファイル</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tfoot>
-        <tr>
-          <th>時間</th>
-          <th>件名</th>
-          <th>送信者</th>
-          <th>受信者</th>
-          <th>クライアントIP</th>
-          <th>メールクライアント</th>
-          <th>本文/添付ファイル</th>
-          <th>操作</th>
-        </tr>
-      </tfoot>
-      <tbody>
-        {% for email in emails %}
-        <tr>
-          <td>{{ email.time }}</td>
-          <td>{{ email.subject }}</td>
-          <td>{{ email.sender }}</td>
-          <td>{{ email.to|join(', ') }}</td>
-          <td>{{ email.client_ip }}</td>
-          <td>{{ email.client_app }}</td>
-          <td>
-            <div>
-              <pre>{{ email.body }}</pre>
-              {% if email.html_body %}
-                <button class="btn btn-sm btn-primary" onclick="openPreview('{{ email.id }}')">HTMLプレビュー</button>
-                <div id="preview-{{ email.id }}" style="display:none;">{{ email.html_body|safe }}</div>
-              {% endif %}
-              {% if email.attachments and email.attachments|length > 0 %}
-                <div class="attachment-links mt-2">
-                  {% for att in email.attachments %}
-                    <a href="{{ url_for('download_attachment', filename=att['saved_name']) }}" class="btn btn-sm btn-secondary" download>{{ att['filename'] }}</a>
-                  {% endfor %}
+    <div class="content-wrapper">
+      <div class="header-container">
+        <h1>受信したメール</h1>
+        <div class="server-info">
+          <p class="title">サーバー情報</p>
+          <p>SMTP: {{ smtp_server }}:{{ smtp_port }}</p>
+          <p>Web: <a href="http://{{ web_server }}:{{ web_port }}">http://{{ web_server }}:{{ web_port }}</a></p>
+        </div>
+      </div>
+      <div class="mb-3">
+        <a href="{{ url_for('refresh_emails') }}" class="btn btn-info">手動更新</a>
+        <a href="{{ url_for('clear_emails') }}" class="btn btn-warning" onclick="return confirm('すべてのメールを削除してもよろしいですか？');">すべてのメールを削除</a>
+      </div>
+      <div class="table-container">
+        <table id="emailTable" class="table table-striped table-bordered">
+          <thead class="table-dark">
+            <tr>
+              <th>時間</th>
+              <th>件名</th>
+              <th>送信者</th>
+              <th>受信者</th>
+              <th>クライアントIP</th>
+              <th>メールクライアント</th>
+              <th>本文/添付ファイル</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tfoot>
+            <tr>
+              <th>時間</th>
+              <th>件名</th>
+              <th>送信者</th>
+              <th>受信者</th>
+              <th>クライアントIP</th>
+              <th>メールクライアント</th>
+              <th>本文/添付ファイル</th>
+              <th>操作</th>
+            </tr>
+          </tfoot>
+          <tbody>
+            {% for email in emails %}
+            <tr>
+              <td>{{ email.time }}</td>
+              <td>{{ email.subject }}</td>
+              <td>{{ email.sender }}</td>
+              <td>{{ email.to|join(', ') }}</td>
+              <td>{{ email.client_ip }}</td>
+              <td>{{ email.client_app }}</td>
+              <td>
+                <div>
+                  <pre>{{ email.body }}</pre>
+                  {% if email.html_body %}
+                    <button class="btn btn-sm btn-primary" onclick="openPreview('{{ email.id }}')">HTMLプレビュー</button>
+                    <div id="preview-{{ email.id }}" style="display:none;">{{ email.html_body|safe }}</div>
+                  {% endif %}
+                  {% if email.attachments and email.attachments|length > 0 %}
+                    <div class="attachment-links mt-2">
+                      {% for att in email.attachments %}
+                        <a href="{{ url_for('download_attachment', filename=att['saved_name']) }}" class="btn btn-sm btn-secondary" download>{{ att['filename'] }}</a>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
                 </div>
-              {% endif %}
-            </div>
-          </td>
-          <td>
-            <a href="{{ url_for('delete_email', email_id=email.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('このメールを削除してもよろしいですか？');">削除</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+              </td>
+              <td>
+                <a href="{{ url_for('delete_email', email_id=email.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('このメールを削除してもよろしいですか？');">削除</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- Modal for HTML preview -->
@@ -396,7 +459,14 @@ HTML_TEMPLATE = """
 
 @app.route("/")
 def index():
-    return render_template_string(HTML_TEMPLATE, emails=received_emails)
+    web_host = "localhost" if SMTP_SERVER == "0.0.0.0" else SMTP_SERVER
+    return render_template_string(HTML_TEMPLATE, 
+        emails=received_emails,
+        smtp_server=SMTP_SERVER,
+        smtp_port=SMTP_PORT,
+        web_server=web_host,
+        web_port=5000
+    )
 
 @app.route("/delete/<email_id>")
 def delete_email(email_id):
