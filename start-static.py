@@ -59,6 +59,100 @@ logger.info("設定：SMTP_SERVER=%s, SMTP_PORT=%s, SENDER_EMAIL=%s", SMTP_SERVE
 logger.info("永続化設定：DB_FILE=%s, 保持日数=%d", DB_FILE, RETENTION_DAYS)
 
 # ----------------------------------------------------------------
+# URL转换功能
+# ----------------------------------------------------------------
+def convert_urls_to_links(text):
+    """将文本中的URL、IP地址和带端口的地址转换为可点击的链接"""
+    import re
+    
+    # 首先识别并保护编程语言的命名空间
+    namespace_patterns = [
+        r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+[a-zA-Z_][a-zA-Z0-9_]*\([^)]*\)',  # 函数调用，如 jp.onehr.ohr.acm.module.role.base.dto.RoleBaseDto.getRoleName()
+        r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+(?:module|class|interface|enum)\b',  # 模块/类/接口定义
+        r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+[A-Z][a-zA-Z0-9_]*(?!\.[0-9])',    # 类引用，如 jp.onehr.ohr.acm.module.role.base.dto
+    ]
+    
+    # 保护命名空间，将它们临时替换为占位符
+    protected_texts = {}
+    counter = 0
+    
+    def protect_match(match):
+        nonlocal counter
+        placeholder = f"__PROTECTED_{counter}__"
+        protected_texts[placeholder] = match.group(0)
+        counter += 1
+        return placeholder
+    
+    # 保护所有匹配到的命名空间
+    result = text
+    for pattern in namespace_patterns:
+        result = re.sub(pattern, protect_match, result)
+    
+    # URL匹配模式
+    url_patterns = [
+        # 带协议的URL
+        r'((?:https?|ftp)://[^\s<>"\']+)',
+        
+        # IP地址（带可选端口和路径）
+        r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?(?:/[^\s<>"\']*)?)',
+        
+        # 域名（带可选端口和路径）
+        r'([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?::\d+)?(?:/[^\s<>"\']*)?)'
+    ]
+    
+    def replace_with_link(match):
+        url = match.group(1)  # 使用捕获组1
+        if not url.startswith(('http://', 'https://', 'ftp://')):
+            url = 'http://' + url
+        return f'<a href="{url}" target="_blank">{match.group(1)}</a>'
+    
+    # 转换URL为链接
+    for pattern in url_patterns:
+        result = re.sub(pattern, replace_with_link, result, flags=re.IGNORECASE)
+    
+    # 恢复被保护的命名空间
+    for placeholder, original in protected_texts.items():
+        result = result.replace(placeholder, original)
+    
+    return result
+
+def clean_content(text):
+    """清理文本内容，去除多余的空行和空格"""
+    if not text:
+        return ""
+    
+    # 将内容按行分割，并移除每行首尾的空白
+    lines = [line.rstrip() for line in text.splitlines()]
+    
+    # 找到第一个非空行
+    start = 0
+    while start < len(lines) and not lines[start]:
+        start += 1
+    
+    # 找到最后一个非空行
+    end = len(lines) - 1
+    while end >= 0 and not lines[end]:
+        end -= 1
+    
+    # 如果全是空行，返回空字符串
+    if start > end:
+        return ""
+    
+    # 提取有效内容行
+    content_lines = lines[start:end + 1]
+    
+    # 合并行，移除连续的空行
+    result = []
+    prev_empty = False
+    for line in content_lines:
+        if line or not prev_empty:  # 如果当前行非空，或者前一行不是空行
+            result.append(line)
+        prev_empty = not line
+    
+    # 将URL转换为链接
+    return convert_urls_to_links("\n".join(result))
+
+# ----------------------------------------------------------------
 # データベース関連の操作
 # ----------------------------------------------------------------
 def init_db():
@@ -106,6 +200,8 @@ def load_emails_from_db():
     conn.close()
     emails = []
     for row in rows:
+        # 在加载时应用URL转换
+        body = convert_urls_to_links(row[7]) if row[7] else ""
         emails.append({
             "id": row[0],
             "time": row[1],
@@ -114,7 +210,7 @@ def load_emails_from_db():
             "to": json.loads(row[4]),
             "client_ip": row[5],
             "client_app": row[6],
-            "body": row[7]
+            "body": body
         })
     return emails
 
@@ -182,12 +278,20 @@ HTML_TEMPLATE = """
       white-space: pre-wrap; 
       word-wrap: break-word;
       font-size: 9pt;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+      line-height: 1.2;  /* 减小行高 */
+      display: block;  /* 块级显示 */
     }
     .container { 
       margin-top: 20px;
-      min-height: calc(100vh - 40px);  /* 减去上下margin的高度 */
+      min-height: calc(100vh - 40px);
       display: flex;
       flex-direction: column;
+      max-width: 1536px;  /* 1920px的80% */
+      width: 80%;  /* 在较小屏幕上使用80%宽度 */
+      padding: 0 15px;
     }
     .content-wrapper {
       flex: 1;
@@ -198,6 +302,12 @@ HTML_TEMPLATE = """
     .table-container {
       flex: 1;
       margin-top: 20px;
+      max-width: 100%;
+      overflow-x: auto;  /* 如果内容过宽，显示横向滚动条 */
+    }
+    .table {
+      width: 100%;
+      table-layout: fixed;  /* 固定表格布局 */
     }
     tfoot input { 
       width: 100%; 
@@ -211,6 +321,19 @@ HTML_TEMPLATE = """
     }
     td {
       font-size: 9pt;
+      max-width: none;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      padding: 4px 8px;
+      vertical-align: middle;
+      line-height: 1.2;  /* 减小行高 */
+    }
+    td > pre {
+      display: inline;  /* pre在td内使用内联显示 */
+    }
+    td > div {
+      margin: 0;
+      padding: 0;
     }
     .btn {
       font-size: 9pt;
@@ -283,6 +406,15 @@ HTML_TEMPLATE = """
       position: relative;
       margin-bottom: 10px;
     }
+    /* 调整各列的宽度 */
+    .table th:nth-child(1) { width: 12%; }  /* 时间列 */
+    .table th:nth-child(2) { width: 15%; }  /* 件名列 */
+    .table th:nth-child(3) { width: 12%; }  /* 送信者列 */
+    .table th:nth-child(4) { width: 12%; }  /* 受信者列 */
+    .table th:nth-child(5) { width: 12%; }  /* クライアントIP列 */
+    .table th:nth-child(6) { width: 12%; }  /* メールクライアント列 */
+    .table th:nth-child(7) { width: 20%; }  /* 本文/添付ファイル列 */
+    .table th:nth-child(8) { width: 5%; }   /* 操作列 */
   </style>
 </head>
 <body>
@@ -335,7 +467,7 @@ HTML_TEMPLATE = """
               <td>{{ email.to|join(', ') }}</td>
               <td>{{ email.client_ip }}</td>
               <td>{{ email.client_app }}</td>
-              <td><pre>{{ email.body }}</pre></td>
+              <td><pre>{{ email.body|safe }}</pre></td>
               <td>
                 <a href="{{ url_for('delete_email', email_id=email.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('このメールを削除してもよろしいですか？');">削除</a>
               </td>
@@ -465,12 +597,12 @@ class CustomHandler:
                 if part.get_content_maintype() == "multipart":
                     continue
                 if part.get_content_type() == "text/plain" and not plain_body:
-                    plain_body = part.get_content()
+                    plain_body = clean_content(part.get_content())
         else:
             if parsed_msg.get_content_type() == "text/plain":
-                plain_body = parsed_msg.get_content()
+                plain_body = clean_content(parsed_msg.get_content())
             else:
-                plain_body = parsed_msg.get_content()
+                plain_body = clean_content(parsed_msg.get_content())
 
         logger.info("  解析後の件名: %s", subject)
         logger.info("  解析されたメールクライアント: %s", client_app if client_app else "なし")
