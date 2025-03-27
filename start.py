@@ -67,6 +67,10 @@ def convert_urls_to_links(text):
     """将文本中的URL、IP地址和带端口的地址转换为可点击的链接"""
     import re
     
+    # 首先检查是否已经包含HTML标签
+    if re.search(r'<[^>]+>', text):
+        return text
+    
     # 首先识别并保护编程语言的命名空间和特殊URL
     protected_patterns = [
         # 编程语言命名空间
@@ -149,8 +153,7 @@ def clean_content(text):
             result.append(line)
         prev_empty = not line
     
-    # 将URL转换为链接
-    return convert_urls_to_links("\n".join(result))
+    return "\n".join(result)
 
 # ----------------------------------------------------------------
 # データベース関連の操作
@@ -210,8 +213,8 @@ def load_emails_from_db():
                 attachments = json.loads(row[9])
             except Exception as e:
                 attachments = []
-        # 在加载时应用URL转换
-        body = convert_urls_to_links(row[7]) if row[7] else ""
+        # 直接使用数据库中的内容，不再进行URL转换
+        body = row[7] if row[7] else ""
         html_body = row[8] if row[8] else ""
         emails.append({
             "id": row[0],
@@ -596,8 +599,15 @@ HTML_TEMPLATE = """
 @app.route("/")
 def index():
     web_host = "localhost" if SMTP_SERVER == "0.0.0.0" else SMTP_SERVER
+    # 在显示时进行URL转换
+    processed_emails = []
+    for email in received_emails:
+        processed_email = email.copy()
+        processed_email['body'] = convert_urls_to_links(email['body']) if email['body'] else ""
+        processed_emails.append(processed_email)
+    
     return render_template_string(HTML_TEMPLATE, 
-        emails=received_emails,
+        emails=processed_emails,
         smtp_server=SMTP_SERVER,
         smtp_port=SMTP_PORT,
         web_server=web_host,

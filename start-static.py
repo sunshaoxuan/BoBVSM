@@ -65,14 +65,23 @@ def convert_urls_to_links(text):
     """将文本中的URL、IP地址和带端口的地址转换为可点击的链接"""
     import re
     
-    # 首先识别并保护编程语言的命名空间
-    namespace_patterns = [
-        r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+[a-zA-Z_][a-zA-Z0-9_]*\([^)]*\)',  # 函数调用，如 jp.onehr.ohr.acm.module.role.base.dto.RoleBaseDto.getRoleName()
+    # 首先检查是否已经包含HTML标签
+    if re.search(r'<[^>]+>', text):
+        return text
+    
+    # 首先识别并保护编程语言的命名空间和特殊URL
+    protected_patterns = [
+        # 编程语言命名空间
+        r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+[a-zA-Z_][a-zA-Z0-9_]*\([^)]*\)',  # 函数调用
         r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+(?:module|class|interface|enum)\b',  # 模块/类/接口定义
-        r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+[A-Z][a-zA-Z0-9_]*(?!\.[0-9])',    # 类引用，如 jp.onehr.ohr.acm.module.role.base.dto
+        r'(?:[a-zA-Z_][a-zA-Z0-9_]*\.)+[A-Z][a-zA-Z0-9_]*(?!\.[0-9])',    # 类引用
+        
+        # 特殊URL模式（如密码重置链接）
+        r'(?:パスワード再設定|password\s+reset).*?URL[：:]\s*\n.*?(?=\n|$)',  # 密码重置URL整行
+        r'target=.*?(?:\n|$)',                                              # target参数行
     ]
     
-    # 保护命名空间，将它们临时替换为占位符
+    # 保护文本，将匹配项临时替换为占位符
     protected_texts = {}
     counter = 0
     
@@ -83,34 +92,27 @@ def convert_urls_to_links(text):
         counter += 1
         return placeholder
     
-    # 保护所有匹配到的命名空间
+    # 保护所有匹配到的文本
     result = text
-    for pattern in namespace_patterns:
-        result = re.sub(pattern, protect_match, result)
+    for pattern in protected_patterns:
+        result = re.sub(pattern, protect_match, result, flags=re.MULTILINE)
     
-    # URL匹配模式
-    url_patterns = [
-        # 带协议的URL
-        r'((?:https?|ftp)://[^\s<>"\']+)',
-        
-        # IP地址（带可选端口和路径）
-        r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?(?:/[^\s<>"\']*)?)',
-        
-        # 域名（带可选端口和路径）
-        r'([a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?::\d+)?(?:/[^\s<>"\']*)?)'
-    ]
+    # 简化的URL匹配模式
+    url_pattern = r'((?:https?|ftp)://[^\s<>"\']+|(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:/[^\s<>"\']*)?|(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?::\d+)?(?:/[^\s<>"\']*)?)'
     
     def replace_with_link(match):
-        url = match.group(1)  # 使用捕获组1
+        url = match.group(1)
         if not url.startswith(('http://', 'https://', 'ftp://')):
-            url = 'http://' + url
+            if url.startswith('www.'):
+                url = 'http://' + url
+            elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', url):
+                url = 'http://' + url
         return f'<a href="{url}" target="_blank">{match.group(1)}</a>'
     
     # 转换URL为链接
-    for pattern in url_patterns:
-        result = re.sub(pattern, replace_with_link, result, flags=re.IGNORECASE)
+    result = re.sub(url_pattern, replace_with_link, result, flags=re.IGNORECASE)
     
-    # 恢复被保护的命名空间
+    # 恢复被保护的文本
     for placeholder, original in protected_texts.items():
         result = result.replace(placeholder, original)
     
@@ -149,8 +151,7 @@ def clean_content(text):
             result.append(line)
         prev_empty = not line
     
-    # 将URL转换为链接
-    return convert_urls_to_links("\n".join(result))
+    return "\n".join(result)
 
 # ----------------------------------------------------------------
 # データベース関連の操作
@@ -167,7 +168,9 @@ def init_db():
             recipients TEXT,
             client_ip TEXT,
             client_app TEXT,
-            body TEXT
+            body TEXT,
+            html_body TEXT,
+            attachments TEXT
         )
     """)
     conn.commit()
@@ -177,8 +180,8 @@ def add_email_to_db(email_data):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
-        INSERT INTO emails (id, time, subject, sender, recipients, client_ip, client_app, body)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO emails (id, time, subject, sender, recipients, client_ip, client_app, body, html_body, attachments)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         email_data["id"],
         email_data["time"],
@@ -187,7 +190,9 @@ def add_email_to_db(email_data):
         json.dumps(email_data["to"]),
         email_data["client_ip"],
         email_data["client_app"],
-        email_data["body"]
+        email_data["body"],
+        email_data["html_body"],
+        json.dumps(email_data["attachments"]) if email_data["attachments"] else None
     ))
     conn.commit()
     conn.close()
@@ -195,13 +200,20 @@ def add_email_to_db(email_data):
 def load_emails_from_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT id, time, subject, sender, recipients, client_ip, client_app, body FROM emails ORDER BY time DESC")
+    c.execute("SELECT id, time, subject, sender, recipients, client_ip, client_app, body, html_body, attachments FROM emails ORDER BY time DESC")
     rows = c.fetchall()
     conn.close()
     emails = []
     for row in rows:
-        # 在加载时应用URL转换
-        body = convert_urls_to_links(row[7]) if row[7] else ""
+        attachments = []
+        if row[9]:
+            try:
+                attachments = json.loads(row[9])
+            except Exception as e:
+                attachments = []
+        # 直接使用数据库中的内容，不再进行URL转换
+        body = row[7] if row[7] else ""
+        html_body = row[8] if row[8] else ""
         emails.append({
             "id": row[0],
             "time": row[1],
@@ -210,7 +222,9 @@ def load_emails_from_db():
             "to": json.loads(row[4]),
             "client_ip": row[5],
             "client_app": row[6],
-            "body": body
+            "body": body,
+            "html_body": html_body,
+            "attachments": attachments
         })
     return emails
 
@@ -538,8 +552,15 @@ HTML_TEMPLATE = """
 @app.route("/")
 def index():
     web_host = "localhost" if SMTP_SERVER == "0.0.0.0" else SMTP_SERVER
+    # 在显示时进行URL转换
+    processed_emails = []
+    for email in received_emails:
+        processed_email = email.copy()
+        processed_email['body'] = convert_urls_to_links(email['body']) if email['body'] else ""
+        processed_emails.append(processed_email)
+    
     return render_template_string(HTML_TEMPLATE, 
-        emails=received_emails,
+        emails=processed_emails,
         smtp_server=SMTP_SERVER,
         smtp_port=SMTP_PORT,
         web_server=web_host,
