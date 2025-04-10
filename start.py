@@ -231,8 +231,26 @@ def load_emails_from_db():
     return emails
 
 def delete_email_from_db(email_id):
+    # 先获取该邮件的附件信息
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
+    c.execute("SELECT attachments FROM emails WHERE id=?", (email_id,))
+    row = c.fetchone()
+    
+    if row and row[0]:
+        try:
+            attachments = json.loads(row[0])
+            # 删除对应的附件文件
+            for attachment in attachments:
+                if 'saved_name' in attachment:
+                    file_path = os.path.join('attachments', attachment['saved_name'])
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        logger.info("附件文件已删除: %s", file_path)
+        except Exception as e:
+            logger.error("删除附件文件时出错: %s", str(e))
+    
+    # 删除邮件记录
     c.execute("DELETE FROM emails WHERE id=?", (email_id,))
     conn.commit()
     conn.close()
@@ -247,11 +265,32 @@ def clear_emails_db():
 def cleanup_emails_db():
     # 閾値時間より古いメールを削除
     threshold = (datetime.datetime.now() - datetime.timedelta(days=RETENTION_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    
+    # 先获取将被删除的邮件中的附件信息
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
+    c.execute("SELECT attachments FROM emails WHERE time < ?", (threshold,))
+    rows = c.fetchall()
+    
+    # 删除附件文件
+    for row in rows:
+        if row[0]:
+            try:
+                attachments = json.loads(row[0])
+                for attachment in attachments:
+                    if 'saved_name' in attachment:
+                        file_path = os.path.join('attachments', attachment['saved_name'])
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                            logger.info("过期附件文件已删除: %s", file_path)
+            except Exception as e:
+                logger.error("删除过期附件文件时出错: %s", str(e))
+    
+    # 删除邮件记录
     c.execute("DELETE FROM emails WHERE time < ?", (threshold,))
     conn.commit()
     conn.close()
+    
     # メモリデータを更新
     global received_emails
     received_emails = load_emails_from_db()
@@ -269,7 +308,7 @@ def run_cleanup():
 init_db()
 received_emails = load_emails_from_db()
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static', static_folder='static')
 
 # Bootstrap + DataTables + Google Fonts (Roboto)を使用してページを美化
 HTML_TEMPLATE = """
@@ -284,158 +323,10 @@ HTML_TEMPLATE = """
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <!-- DataTables CSS -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
-  <style>
-    body { 
-      font-family: 'Roboto', sans-serif;
-      font-size: 9pt;
-    }
-    pre { 
-      white-space: pre-wrap; 
-      word-wrap: break-word;
-      font-size: 9pt;
-      max-width: none;
-      margin: 0;
-      padding: 0;
-      line-height: 1.2;  /* 减小行高 */
-      display: block;  /* 块级显示 */
-    }
-    .container { 
-      margin-top: 20px;
-      min-height: calc(100vh - 40px);
-      display: flex;
-      flex-direction: column;
-      max-width: 1536px;  /* 1920px的80% */
-      width: 80%;  /* 在较小屏幕上使用80%宽度 */
-      padding: 0 15px;
-    }
-    .content-wrapper {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-    }
-    .table-container {
-      flex: 1;
-      margin-top: 20px;
-      max-width: 100%;
-      overflow-x: auto;  /* 如果内容过宽，显示横向滚动条 */
-    }
-    .table {
-      width: 100%;
-      table-layout: fixed;  /* 固定表格布局 */
-    }
-    tfoot input { 
-      width: 100%; 
-      box-sizing: border-box;
-      font-size: 9pt;
-    }
-    .attachment-links a { margin-right: 5px; }
-    th { 
-      white-space: nowrap;
-      font-size: 9pt;
-    }
-    td {
-      font-size: 9pt;
-      max-width: none;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      padding: 4px 8px;
-      vertical-align: middle;
-      line-height: 1.2;  /* 减小行高 */
-    }
-    td > pre {
-      display: inline;  /* pre在td内使用内联显示 */
-    }
-    td > div {
-      margin: 0;
-      padding: 0;
-    }
-    td pre + button,
-    td pre + div {
-      margin-top: 8px;
-    }
-    .attachment-links {
-      margin-top: 8px;
-    }
-    .attachment-links a { 
-      margin-right: 5px;
-      margin-bottom: 0;
-    }
-    h1 {
-      font-size: 16pt;
-      margin: 0;
-      padding-top: 3px;
-    }
-    h5 {
-      font-size: 11pt;
-    }
-    select {
-      font-size: 9pt;
-    }
-    label {
-      font-size: 9pt;
-    }
-    .dataTables_wrapper .dataTables_length select {
-      font-size: 9pt;
-      height: auto;
-      padding: 1px;
-    }
-    .dataTables_wrapper .dataTables_filter input {
-      font-size: 9pt;
-      height: auto;
-      padding: 1px;
-    }
-    .dataTables_info {
-      font-size: 9pt;
-    }
-    .dataTables_paginate {
-      font-size: 9pt;
-    }
-    .server-info {
-      position: absolute;
-      top: 0;
-      right: 0;
-      background: #f8f9fa;
-      color: #212529;
-      padding: 10px;
-      border-radius: 5px;
-      font-size: 9pt;
-      z-index: 1000;
-      border: 1px solid #dee2e6;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .server-info p {
-      margin: 0;
-      padding: 2px 0;
-    }
-    .server-info .title {
-      font-weight: bold;
-      border-bottom: 1px solid #dee2e6;
-      margin-bottom: 5px;
-      padding-bottom: 5px;
-      color: #495057;
-    }
-    .server-info a {
-      color: #0d6efd;  /* Bootstrap 主链接颜色 */
-      text-decoration: none;
-    }
-    .server-info a:hover {
-      text-decoration: underline;
-    }
-    .header-container {
-      position: relative;
-      margin-bottom: 10px;
-    }
-    /* 调整各列的宽度 */
-    .table th:nth-child(1) { width: 12%; }  /* 时间列 */
-    .table th:nth-child(2) { width: 15%; }  /* 件名列 */
-    .table th:nth-child(3) { width: 12%; }  /* 送信者列 */
-    .table th:nth-child(4) { width: 12%; }  /* 受信者列 */
-    .table th:nth-child(5) { width: 12%; }  /* クライアントIP列 */
-    .table th:nth-child(6) { width: 12%; }  /* メールクライアント列 */
-    .table th:nth-child(7) { width: 20%; }  /* 本文/添付ファイル列 */
-    .table th:nth-child(8) { width: 5%; }   /* 操作列 */
-  </style>
+  <!-- DataTables FixedHeader CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
+  <!-- 自作CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
   <div class="container">
@@ -465,19 +356,17 @@ HTML_TEMPLATE = """
               <th>本文/添付ファイル</th>
               <th>操作</th>
             </tr>
-          </thead>
-          <tfoot>
             <tr>
-              <th>時間</th>
-              <th>件名</th>
-              <th>送信者</th>
-              <th>受信者</th>
-              <th>クライアントIP</th>
-              <th>メールクライアント</th>
-              <th>本文/添付ファイル</th>
-              <th>操作</th>
+              <th><input type="text" class="form-control form-control-sm" placeholder="時間でフィルター" /></th>
+              <th><input type="text" class="form-control form-control-sm" placeholder="件名でフィルター" /></th>
+              <th><input type="text" class="form-control form-control-sm" placeholder="送信者でフィルター" /></th>
+              <th><input type="text" class="form-control form-control-sm" placeholder="受信者でフィルター" /></th>
+              <th><input type="text" class="form-control form-control-sm" placeholder="クライアントIPでフィルター" /></th>
+              <th><input type="text" class="form-control form-control-sm" placeholder="メールクライアントでフィルター" /></th>
+              <th><input type="text" class="form-control form-control-sm" placeholder="本文/添付ファイルでフィルター" /></th>
+              <th></th>
             </tr>
-          </tfoot>
+          </thead>
           <tbody>
             {% for email in emails %}
             <tr>
@@ -534,6 +423,12 @@ HTML_TEMPLATE = """
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <!-- DataTables JS -->
   <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+  <!-- DataTables FixedHeader JS -->
+  <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+  <!-- mark.js for highlighting -->
+  <script src="https://cdn.jsdelivr.net/g/mark.js(jquery.mark.min.js)"></script>
+  <!-- DataTables mark.js integration -->
+  <script src="https://cdn.datatables.net/plug-ins/1.10.25/features/mark.js/datatables.mark.js"></script>
   <script>
     $(document).ready(function() {
       // DataTablesの日本語化
@@ -558,27 +453,49 @@ HTML_TEMPLATE = """
         lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
         dom: "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
              "<'row'<'col-sm-12'tr>>" +
-             "<'row'<'col-sm-5'i><'col-sm-7'p>>"
+             "<'row sticky-pagination'<'col-sm-5'i><'col-sm-7'p>>",
+        orderCellsTop: true,
+        scrollCollapse: true,
+        fixedHeader: true,
+        mark: true
       });
 
-      // フッターの各列にフィルター入力欄を追加
-      $('#emailTable tfoot th').each(function(i) {
-        if (i === 7) {
-          $(this).html('');
-        } else {
-          var title = $(this).text();
-          $(this).html('<input type="text" class="form-control form-control-sm" placeholder="' + title + 'でフィルター" />');
-        }
+      // 阻止过滤器输入框点击事件触发排序
+      $('thead tr:eq(1) th input').on('click', function(e) {
+        e.stopPropagation();
       });
 
       // フィルター機能の実装
-      table.columns().every(function() {
+      table.columns().every(function(i) {
         var that = this;
-        $('input', this.footer()).on('keyup change clear', function() {
-          if (that.search() !== this.value) {
-            that.search(this.value).draw();
+        // 使用更精确的选择器找到第二行中的输入框
+        $('thead tr:eq(1) th:eq(' + i + ') input').on('keyup change clear', function(e) {
+          e.stopPropagation(); // 阻止事件冒泡
+          var searchValue = this.value;
+          if (that.search() !== searchValue) {
+            that.search(searchValue).draw();
+            
+            // 在搜索后使用mark.js高亮关键词
+            if (searchValue) {
+              // 移除之前的所有高亮
+              $('td:nth-child(' + (i + 1) + ')').unmark();
+              // 高亮当前列中的匹配内容
+              $('td:nth-child(' + (i + 1) + ')').mark(searchValue, {
+                "separateWordSearch": true,
+                "accuracy": "partially",
+                "caseSensitive": false
+              });
+            } else {
+              // 如果搜索词为空，移除该列的高亮
+              $('td:nth-child(' + (i + 1) + ')').unmark();
+            }
           }
         });
+      });
+      
+      // 全局搜索框也应支持高亮
+      $('.dataTables_filter input').on('keyup', function() {
+        // DataTables的mark插件会自动处理全局搜索高亮
       });
     });
 

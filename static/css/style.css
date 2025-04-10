@@ -1,0 +1,228 @@
+body { 
+  font-family: 'Roboto', sans-serif;
+  font-size: 9pt;
+}
+pre { 
+  white-space: pre-wrap; 
+  word-wrap: break-word;
+  font-size: 9pt;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;  /* 减小行高 */
+  display: block;  /* 块级显示 */
+}
+.container { 
+  margin-top: 20px;
+  min-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  max-width: 1536px;  /* 1920px的80% */
+  width: 80%;  /* 在较小屏幕上使用80%宽度 */
+  padding: 0 15px;
+}
+.content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.table-container {
+  flex: 1;
+  margin-top: 20px;
+  max-width: 100%;
+  overflow-x: auto;  /* 如果内容过宽，显示横向滚动条 */
+  position: relative; /* 添加相对定位 */
+  padding-bottom: 50px; /* 为分页控件预留空间 */
+}
+.table {
+  width: 100%;
+  table-layout: fixed;  /* 固定表格布局 */
+}
+tfoot input { 
+  width: 100%; 
+  box-sizing: border-box;
+  font-size: 9pt;
+}
+.attachment-links a { margin-right: 5px; }
+th { 
+  white-space: nowrap;
+  font-size: 9pt;
+}
+td {
+  font-size: 9pt;
+  max-width: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  padding: 4px 8px;
+  vertical-align: middle;
+  line-height: 1.2;  /* 减小行高 */
+}
+/* 过滤器输入框样式 */
+thead tr:nth-child(2) th {
+  padding: 4px 4px 6px 4px; /* 上右下左，减小顶部距离 */
+  background-color: #212529; /* 与表头相同的深色背景 */
+  border-top: none; /* 移除顶部边框 */
+  border-bottom: 1px solid #dee2e6;
+}
+thead tr:nth-child(2) input {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 9pt;
+  border-radius: 3px;
+  border: 1px solid #ced4da;
+  background-color: rgba(255, 255, 255, 0.9); /* 半透明白色背景 */
+  color: #212529; /* 文本颜色 */
+}
+thead tr:nth-child(2) input::placeholder {
+  color: #6c757d; /* 占位符颜色 */
+  opacity: 0.8;
+}
+/* 移除表头第一行的底部边框 */
+thead tr:first-child th {
+  padding-bottom: 4px; /* 减小底部距离 */
+  border-bottom: none;
+}
+td > pre {
+  display: inline;  /* pre在td内使用内联显示 */
+}
+td > div {
+  margin: 0;
+  padding: 0;
+}
+td pre + button,
+td pre + div {
+  margin-top: 8px;
+}
+.attachment-links {
+  margin-top: 8px;
+}
+.attachment-links a { 
+  margin-right: 5px;
+  margin-bottom: 0;
+}
+h1 {
+  font-size: 16pt;
+  margin: 0;
+  padding-top: 3px;
+}
+h5 {
+  font-size: 11pt;
+}
+select {
+  font-size: 9pt;
+}
+label {
+  font-size: 9pt;
+}
+.btn {
+  font-size: 9pt;
+}
+.form-control {
+  font-size: 9pt;
+}
+.dataTables_wrapper .dataTables_length select {
+  font-size: 9pt;
+  height: auto;
+  padding: 1px;
+}
+.dataTables_wrapper .dataTables_filter input {
+  font-size: 9pt;
+  height: auto;
+  padding: 1px;
+}
+.dataTables_info {
+  font-size: 9pt;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+.dataTables_paginate {
+  font-size: 9pt;
+  position: sticky;
+  bottom: 0;
+  background-color: #fff;
+  padding: 10px 0;
+  z-index: 10;
+  border-top: 1px solid #dee2e6;
+  margin-top: 10px !important;
+  width: 100%;
+  text-align: center !important;
+}
+.server-info {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: #f8f9fa;
+  color: #212529;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 9pt;
+  z-index: 1000;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.server-info p {
+  margin: 0;
+  padding: 2px 0;
+}
+.server-info .title {
+  font-weight: bold;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  color: #495057;
+}
+.server-info a {
+  color: #0d6efd;  /* Bootstrap 主链接颜色 */
+  text-decoration: none;
+}
+.server-info a:hover {
+  text-decoration: underline;
+}
+.header-container {
+  position: relative;
+  margin-bottom: 10px;
+}
+/* 调整各列的宽度 */
+.table th:nth-child(1) { width: 12%; }  /* 时间列 */
+.table th:nth-child(2) { width: 15%; }  /* 件名列 */
+.table th:nth-child(3) { width: 12%; }  /* 送信者列 */
+.table th:nth-child(4) { width: 12%; }  /* 受信者列 */
+.table th:nth-child(5) { width: 12%; }  /* クライアントIP列 */
+.table th:nth-child(6) { width: 12%; }  /* メールクライアント列 */
+.table th:nth-child(7) { width: 20%; }  /* 本文/添付ファイル列 */
+.table th:nth-child(8) { width: 5%; }   /* 操作列 */
+
+/* 调整分页按钮样式 */
+.paginate_button {
+  padding: 0.25rem 0.5rem !important;
+  margin: 0 2px !important;
+}
+.current {
+  background: #0d6efd !important;
+  color: white !important;
+  border: 1px solid #0d6efd !important;
+}
+/* 固定分页容器 */
+.sticky-pagination {
+  position: sticky;
+  bottom: 0;
+  background-color: #fff;
+  margin: 0 !important;
+  padding: 10px 0;
+  z-index: 100;
+  border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+  width: 100%;
+}
+
+/* 关键词高亮样式 */
+mark, .mark, .highlight {
+  padding: 0.1em 0.2em;
+  background-color: #ffeb3b;
+  color: #000;
+  border-radius: 2px;
+  font-weight: bold;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+} 
